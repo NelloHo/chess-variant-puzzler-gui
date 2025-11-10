@@ -320,12 +320,12 @@ class ChessVariantPuzzlerGUI(BoxLayout):
         if self.nnue_path.text: uci_options.extend(['-o', f'EvalFile={self.nnue_path.text}'])
         if self.variant_path.text: uci_options.extend(['-o', f'VariantPath={self.variant_path.text}'])
 
-        gen_cmd = ['/usr/bin/python3.12', 'generator.py', '--engine', self.engine_path.text, '--variant', self.variant.text, '--count', self.num_games.text] + uci_options
+        gen_cmd = ['/usr/bin/python3.12', './_internal/generator.py', '--engine', self.engine_path.text, '--variant', self.variant.text, '--count', self.num_games.text] + uci_options
         gen_output_path = self.input_file.text
         success = self._execute_blocking_command(gen_cmd, f"Positions generated to {gen_output_path}", self.generator_progress, output_file=gen_output_path)
 
         if success:
-            puzzler_cmd = ['/usr/bin/python3.12', 'puzzler.py', '--engine', self.engine_path.text, '--variant', self.variant.text, '-d', self.depth.text, self.input_file.text] + uci_options
+            puzzler_cmd = ['/usr/bin/python3.12', './_internal/puzzler.py', '--engine', self.engine_path.text, '--variant', self.variant.text, '-d', self.depth.text, self.input_file.text] + uci_options
             puzzler_output_path = self.output_file.text
             success = self._execute_blocking_command(
                 puzzler_cmd,
@@ -346,7 +346,7 @@ class ChessVariantPuzzlerGUI(BoxLayout):
         if success and self.pgn_checkbox.active:
             pgn_input_epd = self.output_file.text
             pgn_output_pgn = pgn_input_epd.replace('.epd', '.pgn')
-            pgn_cmd = ['/usr/bin/python3.12', 'pgn.py', pgn_input_epd]
+            pgn_cmd = ['/usr/bin/python3.12', './_internal/pgn.py', pgn_input_epd]
             if self.variant_path.text: pgn_cmd.extend(['-p', self.variant_path.text])
             self._execute_blocking_command(pgn_cmd, f"Converted to {pgn_output_pgn}", output_file=pgn_output_pgn)
 
