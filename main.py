@@ -236,7 +236,7 @@ class ChessVariantPuzzlerGUI(BoxLayout):
         f_out = None
         app_log = None
         try:
-            app_log = open('app.log', 'a') # Open app.log in append mode
+            app_log = open('app.log', 'a', encoding='utf8') # Open app.log in append mode
             app_log.write(f"--- Running: {' '.join(cmd)} ---\n")
 
             self.update_progress(progress_bar, 0)
@@ -254,7 +254,7 @@ class ChessVariantPuzzlerGUI(BoxLayout):
             
             # Open output file if specified
             if output_file:
-                f_out = open(output_file, file_mode)
+                f_out = open(output_file, file_mode, encoding='utf8')
 
             # Helper to read from pipe and log
             def _read_pipe_and_log(pipe, log_prefix, is_stderr=False):
@@ -337,7 +337,7 @@ class ChessVariantPuzzlerGUI(BoxLayout):
             
             if success:
                 try:
-                    with open(puzzler_output_path, 'r') as f:
+                    with open(puzzler_output_path, 'r', encoding='utf8') as f:
                         num_puzzles = sum(1 for line in f if line.strip())
                     self.update_puzzle_count(num_puzzles)
                 except Exception as e:

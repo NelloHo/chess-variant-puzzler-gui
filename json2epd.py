@@ -30,7 +30,7 @@ def generate_fens(json_file, stream, variant, count):
     show_promoted = variant in ("makruk", "makpong", "cambodian")
     sfen = False
 
-    with open(json_file, "r") as f:
+    with open(json_file, "r", encoding='utf8') as f:
         games = json.load(f)
         cnt = 0
         for game in tqdm(games):

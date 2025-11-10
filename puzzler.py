@@ -143,7 +143,7 @@ def rate_puzzle(info, win_threshold):
 
 def generate_puzzles(instream, outstream, engine, variant, depth, win_threshold, unclear_threshold, mate_distance_ratio, clean_distance, mate_only, failed_file, timeout):
     if failed_file:
-        ff = open(failed_file, "w")
+        ff = open(failed_file, "w", encoding='utf8')
 
     # Before the first line has been read, filename() returns None.
     if instream.filename() is None:
@@ -269,5 +269,5 @@ if __name__ == '__main__':
     engine = uci.Engine([args.engine], dict(args.ucioptions))
     engine.setoption('multipv', args.multipv)
     sf.set_option("VariantPath", engine.options.get("VariantPath", ""))
-    with fileinput.input(args.epd_files) as instream:
+    with fileinput.input(args.epd_files, encoding='utf8') as instream:
         generate_puzzles(instream, sys.stdout, engine, args.variant, args.depth, args.win_threshold, args.unclear_threshold, args.mate_distance_ratio, args.clean_distance, args.mate_only, args.failed_file, args.timeout)

@@ -146,7 +146,7 @@ def epd_to_kif(epd_stream, kif_stream):
             # Export to KIF format using cshogi
             try:
                 # Create a temporary file for the KIF exporter
-                with tempfile.NamedTemporaryFile(mode='w+', suffix='.kifu', delete=False) as temp_file:
+                with tempfile.NamedTemporaryFile(mode='w+', suffix='.kifu', delete=False, encoding='utf8') as temp_file:
                     temp_path = temp_file.name
                 
                 try:
@@ -200,5 +200,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     sf.set_option("VariantPath", args.variant_path)
-    with fileinput.input(args.epd_files) as instream:
+    with fileinput.input(args.epd_files, encoding='utf8') as instream:
         epd_to_kif(instream, sys.stdout)

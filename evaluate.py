@@ -14,7 +14,7 @@ def evaluate_puzzles(csv_stream, epd_files):
 
     print('File\t\trecall\tlength\tR/D\tR/V\tR/A\tP/C\tP/L\tP/-V2')
     for epd_file in epd_files:
-        with open(epd_file) as epd_stream:
+        with open(epd_file, encoding='utf8') as epd_stream:
             count = 0
             solution_length = list()
             rating = list()
@@ -50,5 +50,5 @@ if __name__ == '__main__':
     parser.add_argument('epd_files', nargs='*')
     args = parser.parse_args()
 
-    with open(args.csv_file) as csv_file:
+    with open(args.csv_file, encoding='utf8') as csv_file:
         evaluate_puzzles(csv_file, args.epd_files)

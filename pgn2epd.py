@@ -79,7 +79,7 @@ class PrintAllFensVisitor(chess.pgn.BaseVisitor):
 
 def write_fens(pgn_file, stream, variant, count, mate):
     visitor = functools.partial(PrintAllFensVisitor, variant=variant, mate=mate)
-    with open(pgn_file) as pgn:
+    with open(pgn_file, encoding='utf8') as pgn:
         with tqdm(total=game_count(pgn_file)) as pbar:
             cnt = 0
             while True:

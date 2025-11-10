@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
     fen_list = None
     if args.fenfile:
-        with open(args.fenfile) as f:
+        with open(args.fenfile, encoding='utf8') as f:
             fen_list = [line.split(';')[0].strip() for line in f if line.strip() and not line.startswith('#')]
 
     write_fens_parallel(

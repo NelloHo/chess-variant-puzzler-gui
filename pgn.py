@@ -46,5 +46,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     sf.set_option("VariantPath", args.variant_path)
-    with fileinput.input(args.epd_files) as instream:
+    with fileinput.input(args.epd_files, encoding='utf8') as instream:
         epd_to_pgn(instream, sys.stdout)
