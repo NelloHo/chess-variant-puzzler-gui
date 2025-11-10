@@ -143,7 +143,7 @@ class ChessVariantPuzzlerGUI(BoxLayout):
         engine_browse.bind(on_press=lambda x: self.browse_file(self.engine_path))
         engine_grid.add_widget(engine_browse)
         
-        engine_grid.add_widget(Label(text='NNUE File (optional):', size_hint_x=0.3))
+        engine_grid.add_widget(Label(text='NNUE File:', size_hint_x=0.3))
         self.nnue_path = TextInput(multiline=False, hint_text='/path/to/nnue/file.nnue', size_hint_x=0.5)
         self.nnue_path.bind(text=self._update_variant_from_nnue) # Bind for real-time update
         engine_grid.add_widget(self.nnue_path)
