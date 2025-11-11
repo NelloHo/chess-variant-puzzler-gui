@@ -1,4 +1,7 @@
 # Chess Variant Puzzler GUI
+<p align="center">
+  <img src="./2.png" alt="Chess Variant Puzzler GUI Preview" width="300"/>
+</p>
 
 This is a standalone GUI for users to experiment with [ianfab’s Chess Variant Puzzler](https://github.com/ianfab/chess-variant-puzzler).
 
