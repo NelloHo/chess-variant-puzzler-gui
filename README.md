@@ -1,73 +1,27 @@
-# Chess variant puzzle generator
+# Chess Variant Puzzler GUI
+<p align="center">
+  <img src="./2.png" alt="Chess Variant Puzzler GUI Preview" width="300"/>
+</p>
 
-This is a simple puzzle generator for chess variants based on [Fairy-Stockfish](https://github.com/ianfab/Fairy-Stockfish) and its python binding pyffish.
+This is a standalone GUI for users to experiment with [ianfab’s Chess Variant Puzzler](https://github.com/ianfab/chess-variant-puzzler).
 
-## Process
+---
 
-Generating puzzles in PGN format currently consists of running the following scripts
-1. `generator.py` to generate a set of positions in FEN/EPD format from playing engine games. This step can be skipped if positions are extracted from other sources such as databases of human games.
-    * For mate puzzles the new puzzle candidate generator in the [NNUE data generator](https://github.com/fairy-stockfish/variant-nnue-tools/blob/tools/docs/generate_puzzles.md) is highly recommended, because it is much faster.
-    * If you download games from lichess in `.pgn` format, you can use `pgn2epd.py` to generate FENs.
-    * If you download games from pychess in `.json` format, you can use `json2epd.py` to generate FENs.
-3. `puzzler.py` to identify puzzles within those positions and store them as EPD with annotations. This step can be re-run on the resulting EPD to re-evaluate the puzzles, e.g., at higher depth.
-4. `filter.py` to optionally narrow down the set of puzzles according to difficulty, type, etc.
-5. `pgn.py` to convert the EPD to a PGN.
-6. `kif.py` to convert the EPD to KIF format for shogi variants (lishogi compatibility).
+##  Windows Users
 
-## Export Formats
+1. Download the latest version from the [release page](https://github.com/NelloHo/chess-variant-puzzler-gui/releases/tag/1.0).  
+2. Unzip the file and run **`puzzler.exe`**.  
+   - During execution, several console windows will pop up — **do not close them**, or the process will stop.  
+3. Engines and NNUE networks are **not included**.  
+   - You must download them separately from:  
+     - [Fairy-Stockfish Engines](https://fairy-stockfish.github.io/download/)  
+     - [NNUE Files](https://fairy-stockfish.github.io/nnue/)  
+4. You can change the parameters for the puzzler. In general, the higher the Depth, the better the result — but it will take much longer to run. A range of 10–20 is usually the best balance. You can also increase the Threads and Hash values depending on your computer’s performance. If you are not sure, simply use the default values
 
-The puzzle generator supports multiple export formats:
+---
 
-- **EPD**: Extended Position Description format with puzzle annotations
-- **PGN**: Portable Game Notation format for chess variants  
-- **KIF**: Kifu format for shogi variants, compatible with lishogi
+##  Linux Users
 
-The KIF export automatically converts UCI coordinates to USI coordinates and generates proper Japanese notation for shogi puzzles.
+Please use the original repository:  
+ [ianfab/chess-variant-puzzler](https://github.com/ianfab/chess-variant-puzzler)
 
-## Setup
-The scripts require at least python3.2 as well as the dependencies from the `requirements.txt`. Install them using
-```
-pip3 install -r requirements.txt
-```
-
-## Usage
-A simple example of running the scripts with default settings is:
-```
-# generate positions
-python3 generator.py --engine fairy-stockfish --variant crazyhouse > positions.epd
-# extract puzzles
-python3 puzzler.py --engine fairy-stockfish positions.epd > puzzles.epd
-# convert EPD to PGN
-python3 pgn.py puzzles.epd > puzzles.pgn
-```
-
-For shogi variants, you can also export to KIF format:
-```
-# generate shogi positions
-python3 generator.py --engine fairy-stockfish --variant shogi > shogi_positions.epd
-# extract shogi puzzles
-python3 puzzler.py --engine fairy-stockfish shogi_positions.epd > shogi_puzzles.epd
-# convert EPD to KIF for lishogi compatibility
-python3 kif.py shogi_puzzles.epd > shogi_puzzles.kif
-```
-
-Run the scripts with `--help` to get help on the supported parameters.
-
-Usually it makes sense to first run the puzzler with a lower depth but loose filter criteria to pre-filter the positions, followed by a more strict validation at higher depth.
-
-## Evaluate
-The puzzle generator can be evaluated against an existing database of curated puzzles. E.g., for the example of lichess:
-```
-# Download puzzles from https://database.lichess.org/#puzzles
-curl -O https://database.lichess.org/lichess_db_puzzle.csv.bz2
-# Unpack
-bzip2 -dk lichess_db_puzzle.csv.bz2
-# Extract subset
-head -100 lichess_db_puzzle.csv > test.csv
-# Prepare input FENs
-cut -d " " -f 1-6 test.csv | cut -d "," -f 2,3 --output-delimiter=";sm " > test.fen
-# Run puzzler
-python puzzler.py --engine fairy-stockfish -d 10 --variant chess test.fen > test.epd
-# Run evaluation
-python evaluate.py test.csv test.epd
-```
