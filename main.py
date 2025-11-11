@@ -1,6 +1,6 @@
 import os
-import subprocess
 import threading
+import traceback
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
@@ -16,6 +16,10 @@ from kivy.core.window import Window
 from kivy.clock import Clock, mainthread
 from kivy.storage.jsonstore import JsonStore
 from kivy.graphics import Color, RoundedRectangle
+
+import generator
+import puzzler
+import pgn
 
 Window.size = (900, 700)
 
@@ -204,7 +208,67 @@ class ChessVariantPuzzlerGUI(BoxLayout):
     def browse_file(self, target_input):
         popup = FileChooserPopup(lambda path: setattr(target_input, 'text', path))
         popup.open()
-    
+
+    def _log_message(self, text):
+        message = text if text.endswith('\n') else text + '\n'
+        self.append_output(message.strip())
+        try:
+            with open('app.log', 'a', encoding='utf8') as log_file:
+                log_file.write(message)
+        except OSError:
+            pass
+
+    def _build_uci_options(self):
+        options = {}
+        if self.threads.text.strip():
+            options['Threads'] = self.threads.text.strip()
+        if self.hash_size.text.strip():
+            options['Hash'] = self.hash_size.text.strip()
+        if self.nnue_path.text.strip():
+            options['EvalFile'] = self.nnue_path.text.strip()
+        if self.variant_path.text.strip():
+            options['VariantPath'] = self.variant_path.text.strip()
+        return options
+
+    def _make_progress_callback(self, progress_bar, fallback_total=None):
+        def _callback(done, total):
+            total = total or fallback_total
+            if total and total > 0:
+                percent = int((done / total) * 100)
+            else:
+                percent = min(progress_bar.value + 1, 100)
+            self.update_progress(progress_bar, max(0, min(percent, 100)))
+        return _callback
+
+    def _handle_failure(self, context, exc):
+        stack = traceback.format_exc()
+        self._log_message(f"✗ {context}: {exc}")
+        self.append_output(stack)
+        try:
+            with open('app.log', 'a', encoding='utf8') as log_file:
+                log_file.write(stack + '\n')
+        except OSError:
+            pass
+
+    def _count_puzzles_in_file(self, path):
+        try:
+            with open(path, 'r', encoding='utf8') as f:
+                return sum(1 for line in f if line.strip())
+        except OSError as exc:
+            self._log_message(f"Unable to count puzzles in {path}: {exc}")
+            return 0
+
+    def _convert_to_pgn(self, epd_path):
+        pgn_path = epd_path[:-4] + '.pgn' if epd_path.endswith('.epd') else epd_path + '.pgn'
+        try:
+            self._log_message(f"Converting {epd_path} to {pgn_path}...")
+            pgn.sf.set_option("VariantPath", self.variant_path.text.strip())
+            with open(epd_path, 'r', encoding='utf8') as epd_stream, open(pgn_path, 'w', encoding='utf8') as pgn_stream:
+                pgn.epd_to_pgn(epd_stream, pgn_stream)
+            self._log_message(f"✓ Converted to {pgn_path}")
+        except Exception as exc:
+            self._handle_failure('PGN conversion failed', exc)
+
     @mainthread
     def append_output(self, text):
         self.output_text.text += text + '\n'
@@ -230,127 +294,64 @@ class ChessVariantPuzzlerGUI(BoxLayout):
         thread.daemon = True
         thread.start()
 
-    def _execute_blocking_command(self, cmd, success_msg, progress_bar=None, output_file=None, file_mode='w'):
-        self.append_output(f"Running: {' '.join(cmd)}\n")
-        process = None
-        f_out = None
-        app_log = None
-        try:
-            app_log = open('app.log', 'a', encoding='utf8') # Open app.log in append mode
-            app_log.write(f"--- Running: {' '.join(cmd)} ---\n")
-
-            self.update_progress(progress_bar, 0)
-            
-            process_kwargs = {
-                'stderr': subprocess.PIPE,
-                'stdout': subprocess.PIPE, # Always capture stdout to pipe
-                'text': True,
-                'cwd': os.getcwd(),
-                'bufsize': 1, # Line-buffered
-                'universal_newlines': True
-            }
-
-            process = subprocess.Popen(cmd, **process_kwargs)
-            
-            # Open output file if specified
-            if output_file:
-                f_out = open(output_file, file_mode, encoding='utf8')
-
-            # Helper to read from pipe and log
-            def _read_pipe_and_log(pipe, log_prefix, is_stderr=False):
-                for line in iter(pipe.readline, ''):
-                    line = line.strip()
-                    app_log.write(f"[{log_prefix}] {line}\n") # Write to app.log
-                    if is_stderr and '%' in line: # Check for tqdm progress in stderr
-                        try:
-                            percent = int(line.split('%')[0])
-                            self.update_progress(progress_bar, percent)
-                        except (ValueError, IndexError):
-                            self.append_output(f"[{log_prefix}] {line}")
-                    elif line:
-                        self.append_output(f"[{log_prefix}] {line}")
-                        if log_prefix == "stdout" and f_out: # Write stdout to file if specified
-                            f_out.write(line + '\n')
-
-            stdout_thread = threading.Thread(target=_read_pipe_and_log, args=(process.stdout, "stdout", False))
-            stderr_thread = threading.Thread(target=_read_pipe_and_log, args=(process.stderr, "stderr", True))
-
-            stdout_thread.daemon = True
-            stderr_thread.daemon = True
-
-            stdout_thread.start()
-            stderr_thread.start()
-
-            # Wait for the process to terminate
-            process.wait()
-
-            # Wait for reader threads to finish processing all output
-            stdout_thread.join()
-            stderr_thread.join()
-
-            if process.returncode == 0:
-                self.append_output(f"\n✓ {success_msg}\n")
-                app_log.write(f"✓ {success_msg}\n")
-                self.update_progress(progress_bar, 100)
-                return True
-            else:
-                self.append_output(f"\n✗ Command failed with code {process.returncode}\n")
-                app_log.write(f"✗ Command failed with code {process.returncode}\n")
-                return False
-        except Exception as e:
-            import traceback
-            error_str = f"\n✗ Exception: {str(e)}\n{traceback.format_exc()}"
-            self.append_output(error_str)
-            if app_log: app_log.write(error_str + '\n')
-            return False
-        finally:
-            if process and process.stdout:
-                process.stdout.close()
-            if process and process.stderr:
-                process.stderr.close()
-            if f_out:
-                f_out.close()
-            if app_log:
-                app_log.close()
-
     def _workflow_thread(self):
-        uci_options = []
-        if self.threads.text: uci_options.extend(['-o', f'Threads={self.threads.text}'])
-        if self.hash_size.text: uci_options.extend(['-o', f'Hash={self.hash_size.text}'])
-        if self.nnue_path.text: uci_options.extend(['-o', f'EvalFile={self.nnue_path.text}'])
-        if self.variant_path.text: uci_options.extend(['-o', f'VariantPath={self.variant_path.text}'])
+        try:
+            engine_path = self.engine_path.text.strip()
+            variant = self.variant.text.strip() or 'chess'
+            gen_output_path = self.input_file.text.strip() or 'positions.epd'
+            puzzler_output_path = self.output_file.text.strip() or 'puzzles.epd'
 
-        gen_cmd = ['/usr/bin/python3.12', 'generator.py', '--engine', self.engine_path.text, '--variant', self.variant.text, '--count', self.num_games.text] + uci_options
-        gen_output_path = self.input_file.text
-        success = self._execute_blocking_command(gen_cmd, f"Positions generated to {gen_output_path}", self.generator_progress, output_file=gen_output_path)
+            if not engine_path:
+                self._log_message('Please specify the engine path before running.')
+                return
 
-        if success:
-            puzzler_cmd = ['/usr/bin/python3.12', 'puzzler.py', '--engine', self.engine_path.text, '--variant', self.variant.text, '-d', self.depth.text, self.input_file.text] + uci_options
-            puzzler_output_path = self.output_file.text
-            success = self._execute_blocking_command(
-                puzzler_cmd,
-                f"Puzzles extracted to {puzzler_output_path}",
-                self.puzzler_progress,
-                output_file=puzzler_output_path,
-                file_mode='a'
+            try:
+                count = int(self.num_games.text.strip())
+                depth = int(self.depth.text.strip())
+            except ValueError:
+                self._log_message('Count and depth must be integers.')
+                return
+
+            if count <= 0 or depth <= 0:
+                self._log_message('Count and depth must be positive values.')
+                return
+
+            uci_options = self._build_uci_options()
+
+            self._log_message('Generating candidate positions...')
+            generator.run_generator(
+                engine_path,
+                variant,
+                count,
+                gen_output_path,
+                ucioptions=uci_options,
+                progress_callback=self._make_progress_callback(self.generator_progress, count)
             )
-            
-            if success:
-                try:
-                    with open(puzzler_output_path, 'r', encoding='utf8') as f:
-                        num_puzzles = sum(1 for line in f if line.strip())
-                    self.update_puzzle_count(num_puzzles)
-                except Exception as e:
-                    self.append_output(f"Error counting puzzles: {e}")
+            self.update_progress(self.generator_progress, 100)
+            self._log_message(f'✓ Positions generated to {gen_output_path}')
 
-        if success and self.pgn_checkbox.active:
-            pgn_input_epd = self.output_file.text
-            pgn_output_pgn = pgn_input_epd.replace('.epd', '.pgn')
-            pgn_cmd = ['/usr/bin/python3.12', 'pgn.py', pgn_input_epd]
-            if self.variant_path.text: pgn_cmd.extend(['-p', self.variant_path.text])
-            self._execute_blocking_command(pgn_cmd, f"Converted to {pgn_output_pgn}", output_file=pgn_output_pgn)
+            self._log_message('Extracting puzzles...')
+            puzzler.run_puzzler(
+                engine_path,
+                gen_output_path,
+                puzzler_output_path,
+                variant=variant,
+                depth=depth,
+                ucioptions=uci_options,
+                progress_callback=self._make_progress_callback(self.puzzler_progress)
+            )
+            self.update_progress(self.puzzler_progress, 100)
+            self._log_message(f'✓ Puzzles extracted to {puzzler_output_path}')
 
-        self.run_button.disabled = False
+            num_puzzles = self._count_puzzles_in_file(puzzler_output_path)
+            self.update_puzzle_count(num_puzzles)
+
+            if self.pgn_checkbox.active:
+                self._convert_to_pgn(puzzler_output_path)
+        except Exception as exc:
+            self._handle_failure('Workflow failed', exc)
+        finally:
+            Clock.schedule_once(lambda dt: setattr(self.run_button, 'disabled', False), 0)
 
 
 class ChessVariantPuzzlerApp(App):

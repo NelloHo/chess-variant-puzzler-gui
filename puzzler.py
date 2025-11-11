@@ -5,11 +5,16 @@ import math
 import sys
 import threading
 import time
+from typing import Callable, Dict, Optional
+
 from tqdm import tqdm
 import pyffish as sf
 import numpy as np
 
 import uci
+
+
+ProgressCallback = Optional[Callable[[int, Optional[int]], None]]
 
 
 def line_count(filename):
@@ -141,25 +146,38 @@ def rate_puzzle(info, win_threshold):
     return volatility / len(info), volatility2 / len(info),  accuracy / len(info),  accuracy2 / len(info), quality / len(info), mate_distance_fraction
 
 
-def generate_puzzles(instream, outstream, engine, variant, depth, win_threshold, unclear_threshold, mate_distance_ratio, clean_distance, mate_only, failed_file, timeout):
+def _infer_filename(instream):
+    filename = None
+    if hasattr(instream, 'filename'):
+        try:
+            filename = instream.filename()
+        except Exception:
+            filename = None
+        if filename is None and hasattr(instream, '_files'):
+            files = getattr(instream, '_files', [])
+            if files:
+                filename = files[0]
+    if not filename and hasattr(instream, 'name'):
+        filename = instream.name
+    return filename
+
+
+def generate_puzzles(instream, outstream, engine, variant, depth, win_threshold, unclear_threshold, mate_distance_ratio, clean_distance, mate_only, failed_file, timeout, progress_callback: ProgressCallback = None, use_tqdm: bool = True):
     if failed_file:
         ff = open(failed_file, "w", encoding='utf8')
 
-    # Before the first line has been read, filename() returns None.
-    if instream.filename() is None:
-        filename = instream._files[0]
-    else:
-        filename = instream.filename()
+    filename = _infer_filename(instream)
 
     # When reading from sys.stdin, filename() is "-"
-    total = None if (filename == "-") else line_count(filename)
+    total = None if (not filename or filename == "-") else line_count(filename)
+
+    iterator = tqdm(instream, total=total) if use_tqdm else instream
 
     count_time = threading.Event()
     monitor_thread = threading.Thread(target=timeout_monitor, daemon=True, args=[engine, timeout, count_time])
     monitor_thread.start()
-    
-    
-    for i, epd in enumerate(tqdm(instream, total=total)):
+
+    for i, epd in enumerate(iterator):
         tokens = epd.strip().split(';')
         fen = tokens[0]
         annotations = dict(token.split(' ', 1) for token in tokens[1:])
@@ -239,13 +257,60 @@ def generate_puzzles(instream, outstream, engine, variant, depth, win_threshold,
             ops = ';'.join('{} {}'.format(k, v) for k, v in annotations.items())
             outstream.write('{};{}\n'.format(fen, ops))
         elif failed_file:
-            ff.write_file(epd)
+            ff.write(epd)
 
         if i % 100 == 0:
             outstream.flush()
 
+        if progress_callback:
+            progress_callback(i + 1, total)
+
     if failed_file:
         ff.close()
+
+
+def run_puzzler(
+    engine_path: str,
+    input_path: str,
+    output_path: str,
+    *,
+    variant: Optional[str] = None,
+    depth: int = 8,
+    ucioptions: Optional[dict] = None,
+    multipv: int = 2,
+    win_threshold: int = 400,
+    unclear_threshold: int = 100,
+    mate_distance_ratio: float = 1.5,
+    clean_distance: int = 0,
+    mate_only: bool = False,
+    failed_file: Optional[str] = None,
+    timeout: int = 600,
+    progress_callback: ProgressCallback = None,
+):
+    """Run puzzle extraction from Python without spawning a subprocess."""
+
+    options = dict(ucioptions or {})
+    engine = uci.Engine([engine_path], options)
+    engine.setoption('multipv', multipv)
+    sf.set_option("VariantPath", engine.options.get("VariantPath", ""))
+
+    with open(input_path, encoding='utf8') as instream, open(output_path, 'a', encoding='utf8') as outstream:
+        generate_puzzles(
+            instream,
+            outstream,
+            engine,
+            variant,
+            depth,
+            win_threshold,
+            unclear_threshold,
+            mate_distance_ratio,
+            clean_distance,
+            mate_only,
+            failed_file,
+            timeout,
+            progress_callback,
+            use_tqdm=False,
+        )
 
 
 if __name__ == '__main__':

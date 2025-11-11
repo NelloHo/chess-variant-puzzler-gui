@@ -3,11 +3,15 @@ import os
 import random
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from typing import Callable, Dict, Optional
 
 from tqdm import tqdm
 import pyffish as sf
 
 import uci
+
+
+ProgressCallback = Optional[Callable[[int, int], None]]
 
 
 def generate_fens(engine, variant, min_depth, max_depth, add_move, required_pieces, fen_list=None):
@@ -50,7 +54,7 @@ def generate_fens_worker(engine_path, ucioptions, variant, min_depth, max_depth,
     return results
 
 
-def write_fens_parallel(stream, engine_path, ucioptions, variant, count, min_depth, max_depth, add_move, required_pieces, workers, fen_list=None):
+def write_fens_parallel(stream, engine_path, ucioptions, variant, count, min_depth, max_depth, add_move, required_pieces, workers, fen_list=None, progress_callback: ProgressCallback = None):
     batch_size = 1000
     total_batches = (count + batch_size - 1) // batch_size
     submitted = 0
@@ -80,6 +84,8 @@ def write_fens_parallel(stream, engine_path, ucioptions, variant, count, min_dep
                     stream.write('{};variant {}'.format(fen, variant) + (';sm {}'.format(move) if move else '') + os.linesep)
                     written += 1
                     pbar.update(1)
+                    if progress_callback:
+                        progress_callback(written, count)
                     if written >= count:
                         stream.flush()
                         return
@@ -101,6 +107,50 @@ def write_fens_parallel(stream, engine_path, ucioptions, variant, count, min_dep
                         fen_list
                     ))
                     submitted += 1
+
+
+def run_generator(
+    engine_path: str,
+    variant: str,
+    count: int,
+    output_path: str,
+    ucioptions: Optional[Dict[str, str]] = None,
+    *,
+    min_depth: int = 1,
+    max_depth: int = 5,
+    add_move: bool = False,
+    required_pieces: Optional[str] = None,
+    workers: int = 1,
+    fen_file: Optional[str] = None,
+    skill_level: int = 10,
+    progress_callback: ProgressCallback = None,
+):
+    """Helper used by the GUI to generate FENs without spawning a subprocess."""
+
+    options = dict(ucioptions or {})
+    options.setdefault('Skill Level', skill_level)
+    sf.set_option("VariantPath", options.get("VariantPath", ""))
+
+    fen_list = None
+    if fen_file:
+        with open(fen_file, encoding='utf8') as f:
+            fen_list = [line.split(';')[0].strip() for line in f if line.strip() and not line.startswith('#')]
+
+    with open(output_path, 'w', encoding='utf8') as stream:
+        write_fens_parallel(
+            stream,
+            engine_path,
+            options,
+            variant,
+            count,
+            min_depth,
+            max_depth,
+            add_move,
+            required_pieces,
+            workers,
+            fen_list,
+            progress_callback,
+        )
 
 
 if __name__ == '__main__':
