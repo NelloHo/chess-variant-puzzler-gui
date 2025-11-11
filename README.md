@@ -16,6 +16,7 @@ This is a standalone GUI for users to experiment with [ianfab’s Chess Variant 
    - You must download them separately from:  
      - [Fairy-Stockfish Engines](https://fairy-stockfish.github.io/download/)  
      - [NNUE Files](https://fairy-stockfish.github.io/nnue/)  
+4. You can change the parameters for the puzzler. In general, the higher the Depth, the better the result — but it will take much longer to run. A range of 10–20 is usually the best balance. You can also increase the Threads and Hash values depending on your computer’s performance. If you are not sure, simply use the default values
 
 ---
 
